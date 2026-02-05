@@ -12,6 +12,7 @@ export const defaultCategories: Category[] = [
   { id: 'cleaning', name: 'Temizlik', slug: 'temizlik', productCount: 24 },
   { id: 'furniture', name: 'Mobilya', slug: 'mobilya', productCount: 18 },
   { id: 'dairy', name: 'Süt Ürünleri', slug: 'sut-urunleri', productCount: 15 },
+  { id: 'tea', name: 'Çay', slug: 'cay', productCount: 8 },
 ]
 
 const CATEGORIES_STORAGE_KEY = 'kafe-market-categories'

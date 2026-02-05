@@ -85,6 +85,20 @@ export const vendors: Vendor[] = [
     status: 'approved',
     createdAt: '2024-01-03',
   },
+  {
+    id: 'top-roasters',
+    name: 'Top Roasters',
+    slug: 'top-roasters',
+    rating: 4.9,
+    city: 'İstanbul',
+    minOrder: 250,
+    deliveryRegions: ['Türkiye Geneli'],
+    verified: true,
+    description: 'Premium kahve ve çay çekirdeği tedarikçisi. Ataşehir, İstanbul.',
+    productCount: 35,
+    status: 'approved',
+    createdAt: '2024-01-02',
+  },
 ]
 
 const VENDORS_STORAGE_KEY = 'kafe-market-vendors-status'

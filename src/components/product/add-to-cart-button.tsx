@@ -7,6 +7,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCart } from '@/context/cart-context'
 import { Product } from '@/types'
+import { parseTurkishNumber } from '@/lib/import-utils'
+import { cn } from '@/lib/utils'
+
+interface SizeOption {
+  label: string
+  price: number
+}
+
+function parseSizeOptions(specs: Product['specs']): SizeOption[] {
+  const pattern = /^(.+?)\s+[Ff]iyat$/
+  return specs
+    .map((spec) => {
+      const match = spec.key.match(pattern)
+      if (!match) return null
+      return { label: match[1], price: parseTurkishNumber(spec.value) }
+    })
+    .filter((opt): opt is SizeOption => opt !== null)
+}
 
 interface AddToCartButtonProps {
   product: Product
@@ -14,8 +32,16 @@ interface AddToCartButtonProps {
 
 export function AddToCartButton({ product }: AddToCartButtonProps) {
   const { addItem } = useCart()
+  const sizeOptions = parseSizeOptions(product.specs)
+  const hasSizes = sizeOptions.length >= 2
+
+  const [selectedSize, setSelectedSize] = useState<SizeOption | null>(
+    hasSizes ? sizeOptions[0] : null
+  )
   const [quantity, setQuantity] = useState(product.moq)
   const [isAdded, setIsAdded] = useState(false)
+
+  const unitPrice = selectedSize ? selectedSize.price : product.priceMin
 
   const handleDecrease = () => {
     if (quantity > product.moq) {
@@ -35,13 +61,12 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
   }
 
   const handleAddToCart = () => {
-    addItem(product.id, quantity)
+    addItem(product.id, quantity, selectedSize?.label)
     setIsAdded(true)
     toast.success(`${product.name} sepete eklendi`, {
-      description: `${quantity} adet`,
+      description: `${quantity} adet${selectedSize ? ` - ${selectedSize.label}` : ''}`,
     })
 
-    // Reset button after 2 seconds
     setTimeout(() => {
       setIsAdded(false)
     }, 2000)
@@ -51,6 +76,42 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
 
   return (
     <div className="space-y-4">
+      {/* Dynamic Price — rendered here when size variants exist */}
+      {hasSizes && (
+        <div>
+          <p className="text-3xl font-bold">
+            {unitPrice.toLocaleString('tr-TR')} TL
+          </p>
+          <p className="text-muted-foreground text-sm">KDV dahil</p>
+        </div>
+      )}
+
+      {/* Gramaj Selector */}
+      {hasSizes && (
+        <div>
+          <p className="mb-2 text-sm font-medium">Gramaj</p>
+          <div className="flex flex-wrap gap-2">
+            {sizeOptions.map((option) => (
+              <button
+                key={option.label}
+                onClick={() => setSelectedSize(option)}
+                className={cn(
+                  'rounded-md border px-3 py-1.5 text-sm transition-colors',
+                  selectedSize?.label === option.label
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-muted text-muted-foreground hover:border-foreground hover:text-foreground'
+                )}
+              >
+                {option.label}
+                <span className="ml-1.5 text-xs opacity-70">
+                  {option.price.toLocaleString('tr-TR')} ₺
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quantity Selector */}
       <div className="flex items-center gap-4">
         <span className="text-sm font-medium">Miktar:</span>
@@ -114,9 +175,9 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
         <p className="text-muted-foreground text-center text-sm">
           Toplam:{' '}
           <span className="text-foreground font-medium">
-            {(product.priceMin * quantity).toLocaleString('tr-TR')} TL
+            {(unitPrice * quantity).toLocaleString('tr-TR')} TL
           </span>
-          {product.priceMin !== product.priceMax && (
+          {!hasSizes && product.priceMin !== product.priceMax && (
             <span>
               {' '}
               - {(product.priceMax * quantity).toLocaleString('tr-TR')} TL

@@ -61,7 +61,20 @@ function applyModeration(product: Product): Product {
 
 // Get all products with moderation applied (for admin)
 export function getAllProductsForAdmin(): Product[] {
-  return mockProducts.map((p) => applyModeration(getProductWithRelations(p)))
+  const adminStored = typeof window !== 'undefined'
+    ? (() => {
+        try {
+          const stored = localStorage.getItem('kafe-market-admin-products')
+          return stored ? (JSON.parse(stored) as Product[]) : []
+        } catch {
+          return [] as Product[]
+        }
+      })()
+    : []
+
+  return [...mockProducts, ...adminStored].map((p) =>
+    applyModeration(getProductWithRelations(p))
+  )
 }
 
 // Get product by ID with moderation applied
@@ -176,6 +189,119 @@ export function isProductActive(id: string): boolean {
 
   // Default: products are active
   return true
+}
+
+// ─── Admin product CRUD ─────────────────────────────────────────
+
+const ADMIN_PRODUCTS_KEY = 'kafe-market-admin-products'
+
+function getAdminStoredProducts(): Product[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(ADMIN_PRODUCTS_KEY)
+    if (stored) return JSON.parse(stored) as Product[]
+  } catch {
+    // ignore
+  }
+  return []
+}
+
+function saveAdminProducts(prods: Product[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(ADMIN_PRODUCTS_KEY, JSON.stringify(prods))
+  } catch (error) {
+    console.error('Failed to save admin products:', error)
+  }
+}
+
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim()
+}
+
+export function createAdminProduct(
+  data: Omit<Product, 'id' | 'slug' | 'createdAt'>
+): Product {
+  const adminProducts = getAdminStoredProducts()
+
+  const newProduct: Product = {
+    ...data,
+    id: `admin-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    slug: generateSlug(data.name),
+    createdAt: new Date().toISOString(),
+  }
+
+  adminProducts.push(newProduct)
+  saveAdminProducts(adminProducts)
+
+  return getProductWithRelations(newProduct)
+}
+
+export function updateAdminProduct(
+  id: string,
+  data: Partial<Omit<Product, 'id' | 'createdAt'>>
+): Product | null {
+  const adminProducts = getAdminStoredProducts()
+  const adminIndex = adminProducts.findIndex((p) => p.id === id)
+
+  if (adminIndex !== -1) {
+    adminProducts[adminIndex] = {
+      ...adminProducts[adminIndex],
+      ...data,
+      slug: data.name
+        ? generateSlug(data.name)
+        : adminProducts[adminIndex].slug,
+    }
+    saveAdminProducts(adminProducts)
+    return getProductWithRelations(adminProducts[adminIndex])
+  }
+
+  // If it's a hardcoded product, clone it with updates into admin storage & hide original
+  const hardcoded = mockProducts.find((p) => p.id === id)
+  if (hardcoded) {
+    const updatedProduct: Product = {
+      ...hardcoded,
+      ...data,
+      slug: data.name ? generateSlug(data.name) : hardcoded.slug,
+    }
+    adminProducts.push(updatedProduct)
+    saveAdminProducts(adminProducts)
+    hideProduct(id)
+    return getProductWithRelations(updatedProduct)
+  }
+
+  return null
+}
+
+export function deleteAdminProduct(id: string): boolean {
+  const adminProducts = getAdminStoredProducts()
+  const adminIndex = adminProducts.findIndex((p) => p.id === id)
+
+  if (adminIndex !== -1) {
+    adminProducts.splice(adminIndex, 1)
+    saveAdminProducts(adminProducts)
+    return true
+  }
+
+  // If it's a hardcoded product, hide it via moderation
+  const hardcoded = mockProducts.find((p) => p.id === id)
+  if (hardcoded) {
+    hideProduct(id)
+    return true
+  }
+
+  return false
 }
 
 // Get product stats for admin dashboard

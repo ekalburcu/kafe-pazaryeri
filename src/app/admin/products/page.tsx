@@ -11,6 +11,10 @@ import {
   Flag,
   CheckCircle,
   AlertTriangle,
+  Plus,
+  Upload,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +35,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { useAuth } from '@/context/auth-context'
@@ -40,10 +51,18 @@ import {
   showProduct,
   flagProduct,
   unflagProduct,
+  createAdminProduct,
+  updateAdminProduct,
+  deleteAdminProduct,
 } from '@/lib/data/admin-products'
 import { Product } from '@/types'
+import { ProductFormData } from '@/lib/schemas/product'
+import { ProductForm } from '@/components/vendor/product-form'
+import { ImportProductsModal } from '@/components/admin/import-products-modal'
+import { ImportedProduct } from '@/lib/import-utils'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
+import { getAllVendors } from '@/lib/data/vendors'
 
 export default function AdminProductsPage() {
   const router = useRouter()
@@ -51,14 +70,27 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // Add / Edit dialog
+  const [formDialogOpen, setFormDialogOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [formVendorId, setFormVendorId] = useState('')
+
+  // Import modal
+  const [importModalOpen, setImportModalOpen] = useState(false)
+
   // Flag dialog
   const [flagDialogOpen, setFlagDialogOpen] = useState(false)
   const [productToFlag, setProductToFlag] = useState<Product | null>(null)
   const [flagReason, setFlagReason] = useState('')
 
+  // Delete confirm dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+
+  const vendors = getAllVendors()
+
   const loadProducts = () => {
-    const allProducts = getAllProductsForAdmin()
-    setProducts(allProducts)
+    setProducts(getAllProductsForAdmin())
   }
 
   useEffect(() => {
@@ -78,6 +110,79 @@ export default function AdminProductsPage() {
     }
   }, [authLoading, isAuthenticated, user, router])
 
+  // ─── Add / Edit ──────────────────────────────────────────────
+  const openAddDialog = () => {
+    setEditingProduct(null)
+    setFormVendorId('')
+    setFormDialogOpen(true)
+  }
+
+  const openEditDialog = (product: Product) => {
+    setEditingProduct(product)
+    setFormVendorId(product.vendorId)
+    setFormDialogOpen(true)
+  }
+
+  const handleFormSubmit = async (data: ProductFormData) => {
+    const productData = {
+      ...data,
+      vendorId: formVendorId || 'kahve-dunyasi',
+    }
+
+    if (editingProduct) {
+      updateAdminProduct(editingProduct.id, productData)
+      toast.success('Ürün güncellendi')
+    } else {
+      createAdminProduct(productData)
+      toast.success('Ürün eklendi')
+    }
+
+    setFormDialogOpen(false)
+    loadProducts()
+  }
+
+  // ─── Delete ──────────────────────────────────────────────────
+  const openDeleteDialog = (product: Product) => {
+    setProductToDelete(product)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDelete = () => {
+    if (productToDelete) {
+      deleteAdminProduct(productToDelete.id)
+      toast.success('Ürün silindi')
+    }
+    setDeleteDialogOpen(false)
+    setProductToDelete(null)
+    loadProducts()
+  }
+
+  // ─── Import ──────────────────────────────────────────────────
+  const handleImport = (importedProducts: ImportedProduct[]) => {
+    let count = 0
+    for (const p of importedProducts) {
+      createAdminProduct({
+        name: p.name,
+        categoryId: p.categoryId,
+        brand: p.brand,
+        vendorId: p.vendorId || 'kahve-dunyasi',
+        priceMin: p.priceMin,
+        priceMax: p.priceMax,
+        description: p.description || `${p.name} ürünü`,
+        tags: p.tags,
+        specs: p.specs,
+        images: ['/images/products/coffee-default.jpg'],
+        moq: 1,
+        leadTimeDays: 3,
+        availability: 'in_stock',
+      })
+      count++
+    }
+    toast.success(`${count} ürün başarıyla eklendi`)
+    loadProducts()
+  }
+
+  // ─── Show / Hide ─────────────────────────────────────────────
   const handleToggleActive = (product: Product) => {
     if (product.isActive === false) {
       showProduct(product.id)
@@ -89,6 +194,7 @@ export default function AdminProductsPage() {
     loadProducts()
   }
 
+  // ─── Flag ────────────────────────────────────────────────────
   const openFlagDialog = (product: Product) => {
     setProductToFlag(product)
     setFlagReason(product.flagReason || '')
@@ -117,6 +223,7 @@ export default function AdminProductsPage() {
     loadProducts()
   }
 
+  // ─── Columns ─────────────────────────────────────────────────
   const columns: ColumnDef<Product>[] = [
     {
       accessorKey: 'name',
@@ -163,7 +270,7 @@ export default function AdminProductsPage() {
               {product.isActive !== false ? 'Aktif' : 'Gizli'}
             </Badge>
             {product.flagged && (
-              <Badge variant="destructive">
+              <Badge variant="outline">
                 <AlertTriangle className="mr-1 h-3 w-3" />
                 İşaretli
               </Badge>
@@ -190,6 +297,10 @@ export default function AdminProductsPage() {
                   <Eye className="mr-2 h-4 w-4" />
                   Görüntüle
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openEditDialog(product)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Düzenle
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {product.isActive !== false ? (
@@ -218,12 +329,18 @@ export default function AdminProductsPage() {
               ) : (
                 <DropdownMenuItem
                   onClick={() => openFlagDialog(product)}
-                  className="text-destructive"
                 >
                   <Flag className="mr-2 h-4 w-4" />
                   İşaretle
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => openDeleteDialog(product)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Sil
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -244,11 +361,64 @@ export default function AdminProductsPage() {
       title="Ürünler"
       description="Platform ürünlerini yönetin ve modere edin"
     >
+      <div className="flex justify-end gap-2 mb-4">
+        <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+          <Upload className="mr-2 h-4 w-4" />
+          Import
+        </Button>
+        <Button onClick={openAddDialog}>
+          <Plus className="mr-2 h-4 w-4" />
+          Ürün Ekle
+        </Button>
+      </div>
+
       <DataTable
         columns={columns}
         data={products}
         searchKey="name"
         searchPlaceholder="Ürün ara..."
+      />
+
+      {/* Add / Edit Dialog */}
+      <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingProduct ? 'Ürün Düzenle' : 'Yeni Ürün Ekle'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingProduct
+                ? 'Ürün bilgilerini düzenleyin ve kaydedin'
+                : 'Yeni ürün bilgilerini doldurun'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Tedarikçi</Label>
+            <Select value={formVendorId} onValueChange={setFormVendorId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tedarikçi seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {vendors.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ProductForm
+            initialData={editingProduct || undefined}
+            onSubmit={handleFormSubmit}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Modal */}
+      <ImportProductsModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImport={handleImport}
       />
 
       {/* Flag Dialog */}
@@ -275,8 +445,29 @@ export default function AdminProductsPage() {
             <Button variant="outline" onClick={() => setFlagDialogOpen(false)}>
               İptal
             </Button>
-            <Button variant="destructive" onClick={handleFlag}>
+            <Button onClick={handleFlag}>
               İşaretle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ürün Sil</DialogTitle>
+            <DialogDescription>
+              &quot;{productToDelete?.name}&quot; ürünü silmek istediğinizden emin
+              misiniz? Bu işlem geri alınamaz.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              İptal
+            </Button>
+            <Button onClick={handleDelete}>
+              Sil
             </Button>
           </DialogFooter>
         </DialogContent>

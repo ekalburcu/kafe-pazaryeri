@@ -47,6 +47,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const availability = availabilityLabels[product.availability]
 
+  const hasSizeVariants =
+    product.specs.filter((s) => /^.+\s+[Ff]iyat$/.test(s.key)).length >= 2
+
   const breadcrumbItems = [
     { label: 'Katalog', href: '/catalog' },
     ...(product.category
@@ -86,15 +89,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <p className="text-muted-foreground mt-1">{product.brand}</p>
           </div>
 
-          {/* Price */}
-          <div>
-            <p className="text-3xl font-bold">
-              {product.priceMin === product.priceMax
-                ? `${product.priceMin.toLocaleString('tr-TR')} TL`
-                : `${product.priceMin.toLocaleString('tr-TR')} - ${product.priceMax.toLocaleString('tr-TR')} TL`}
-            </p>
-            <p className="text-muted-foreground text-sm">KDV dahil</p>
-          </div>
+          {/* Price — static fallback when no size variants; AddToCartButton shows dynamic price otherwise */}
+          {!hasSizeVariants && (
+            <div>
+              <p className="text-3xl font-bold">
+                {product.priceMin === product.priceMax
+                  ? `${product.priceMin.toLocaleString('tr-TR')} TL`
+                  : `${product.priceMin.toLocaleString('tr-TR')} - ${product.priceMax.toLocaleString('tr-TR')} TL`}
+              </p>
+              <p className="text-muted-foreground text-sm">KDV dahil</p>
+            </div>
+          )}
 
           {/* Quick Info */}
           <div className="flex flex-wrap gap-4">

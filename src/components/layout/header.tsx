@@ -11,6 +11,7 @@ import {
   FileText,
   Settings,
   ChevronDown,
+  Shield,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -123,6 +124,17 @@ export function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {user.role === 'admin' && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/dashboard" className="cursor-pointer">
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin Paneli
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem asChild>
                   <Link href="/account" className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
@@ -235,6 +247,16 @@ export function Header() {
                 {isAuthenticated && user ? (
                   <>
                     <div className="my-2 border-t" />
+                    {user.role === 'admin' && (
+                      <Link
+                        href="/admin/dashboard"
+                        onClick={() => setIsOpen(false)}
+                        className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-lg font-medium transition-colors"
+                      >
+                        <Shield className="h-5 w-5" />
+                        Admin Paneli
+                      </Link>
+                    )}
                     <Link
                       href="/account"
                       onClick={() => setIsOpen(false)}

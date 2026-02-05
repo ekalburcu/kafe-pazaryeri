@@ -93,11 +93,11 @@ export function AdminLayout({
             <CardContent className="p-4">
               {/* Admin Badge */}
               <div className="mb-4 text-center">
-                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
+                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background">
                   <Shield className="h-6 w-6" />
                 </div>
                 <p className="font-medium">{user?.name || 'Admin'}</p>
-                <Badge variant="destructive" className="mt-1">
+                <Badge variant="default" className="mt-1">
                   Yönetici
                 </Badge>
               </div>
@@ -116,7 +116,7 @@ export function AdminLayout({
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                         isActive
-                          ? 'bg-destructive text-destructive-foreground'
+                          ? 'bg-foreground text-background'
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       )}
                     >
@@ -128,7 +128,7 @@ export function AdminLayout({
                 <Separator className="my-2" />
                 <button
                   onClick={logout}
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   <LogOut className="h-4 w-4" />
                   Çıkış Yap
@@ -146,7 +146,7 @@ export function AdminLayout({
             return (
               <Button
                 key={item.href}
-                variant={isActive ? 'destructive' : 'outline'}
+                variant={isActive ? 'default' : 'outline'}
                 size="sm"
                 asChild
               >
