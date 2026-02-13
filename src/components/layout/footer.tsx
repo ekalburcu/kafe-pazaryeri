@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Coffee } from 'lucide-react'
+import Image from 'next/image'
 import { Separator } from '@/components/ui/separator'
 
 export function Footer() {
@@ -9,9 +9,14 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <Coffee className="text-primary h-6 w-6" />
-              <span className="text-xl font-bold">KafeMarket</span>
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/logo.png"
+                alt="İgballo Kafe Market"
+                width={160}
+                height={48}
+                className="h-12 w-auto"
+              />
             </Link>
             <p className="text-muted-foreground text-sm">
               Kafeniz için ihtiyacınız olan her şey, tek platformda.

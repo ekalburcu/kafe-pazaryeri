@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { Package } from 'lucide-react'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,9 +26,15 @@ const availabilityLabels: Record<
   out_of_stock: { label: 'Tükendi', variant: 'destructive' },
 }
 
+function isExternalImage(src: string) {
+  return src.startsWith('http://') || src.startsWith('https://')
+}
+
 export function ProductCard({ product }: ProductCardProps) {
   const availability =
     availabilityLabels[product.availability] || availabilityLabels.in_stock
+  const imageUrl = product.images?.[0]
+  const hasRealImage = imageUrl && (isExternalImage(imageUrl) || !imageUrl.includes('-default.'))
 
   return (
     <Card className="group flex h-full flex-col overflow-hidden transition-shadow hover:shadow-lg">
@@ -35,9 +42,19 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className="relative">
           <Link href={`/product/${product.slug}`}>
             <div className="bg-muted relative flex aspect-square items-center justify-center overflow-hidden">
-              <Package className="text-muted-foreground h-16 w-16" />
+              {hasRealImage ? (
+                <Image
+                  src={imageUrl}
+                  alt={product.name}
+                  fill
+                  className="object-cover transition-transform group-hover:scale-105"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                />
+              ) : (
+                <Package className="text-muted-foreground h-16 w-16" />
+              )}
               {product.featured && (
-                <Badge className="absolute top-2 left-2" variant="default">
+                <Badge className="absolute top-2 left-2 z-10" variant="default">
                   Öne Çıkan
                 </Badge>
               )}

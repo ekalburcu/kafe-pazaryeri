@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState } from 'react'
 import {
   Menu,
-  Coffee,
   ShoppingCart,
   User,
   LogOut,
@@ -63,9 +63,15 @@ export function Header() {
     <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <Coffee className="text-primary h-6 w-6" />
-          <span className="text-xl font-bold">KafeMarket</span>
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="İgballo Kafe Market"
+            width={160}
+            height={48}
+            className="h-12 w-auto"
+            priority
+          />
         </Link>
 
         {/* Desktop Nav */}
@@ -197,9 +203,14 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[300px]">
-              <SheetTitle className="flex items-center gap-2">
-                <Coffee className="text-primary h-5 w-5" />
-                KafeMarket
+              <SheetTitle className="flex items-center">
+                <Image
+                  src="/logo.png"
+                  alt="İgballo Kafe Market"
+                  width={140}
+                  height={42}
+                  className="h-10 w-auto"
+                />
               </SheetTitle>
 
               {/* Mobile User Info */}
