@@ -15,6 +15,7 @@ import {
 import {
   parseCSV,
   extractPDFText,
+  parsePDFWithImages,
   downloadCSVTemplate,
   ImportedProduct,
 } from '@/lib/import-utils'
@@ -59,11 +60,18 @@ export function ImportProductsModal({
         selectedFile.name.endsWith('.pdf') ||
         selectedFile.type === 'application/pdf'
       ) {
-        const text = await extractPDFText(selectedFile)
-        if (!text.trim()) {
-          setError('PDF dosyasından metin çıkarılamadı.')
+        const products = await parsePDFWithImages(selectedFile)
+        if (products.length > 0) {
+          setCsvProducts(products)
         } else {
-          setPdfText(text)
+          // Fallback: show raw text if auto-parsing found nothing
+          const text = await extractPDFText(selectedFile)
+          if (!text.trim()) {
+            setError('PDF dosyasından metin çıkarılamadı.')
+          } else {
+            setPdfText(text)
+            setError('PDF otomatik parse edilemedi. CSV şablonunu kullanmanız önerilir.')
+          }
         }
       } else {
         setError('Desteklenen dosya türleri: CSV, PDF')
@@ -169,6 +177,7 @@ export function ImportProductsModal({
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
                     <tr>
+                      <th className="p-2 font-medium w-10"></th>
                       <th className="text-left p-2 font-medium">Ürün</th>
                       <th className="text-left p-2 font-medium">Marka</th>
                       <th className="text-left p-2 font-medium">Kategori</th>
@@ -178,6 +187,18 @@ export function ImportProductsModal({
                   <tbody>
                     {csvProducts.map((p, i) => (
                       <tr key={i} className="border-t">
+                        <td className="p-2">
+                          {p.imageDataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.imageDataUrl}
+                              alt={p.name}
+                              className="w-8 h-8 object-contain rounded"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-muted rounded" />
+                          )}
+                        </td>
                         <td className="p-2">{p.name}</td>
                         <td className="p-2 text-muted-foreground">{p.brand}</td>
                         <td className="p-2">

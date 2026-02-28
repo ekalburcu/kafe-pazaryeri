@@ -15,6 +15,7 @@ import {
   Upload,
   Pencil,
   Trash2,
+  Images,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -59,6 +60,7 @@ import { Product } from '@/types'
 import { ProductFormData } from '@/lib/schemas/product'
 import { ProductForm } from '@/components/vendor/product-form'
 import { ImportProductsModal } from '@/components/admin/import-products-modal'
+import { PdfImageExtractorModal } from '@/components/admin/pdf-image-extractor-modal'
 import { ImportedProduct } from '@/lib/import-utils'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -77,6 +79,9 @@ export default function AdminProductsPage() {
 
   // Import modal
   const [importModalOpen, setImportModalOpen] = useState(false)
+
+  // PDF image extractor modal
+  const [pdfImageModalOpen, setPdfImageModalOpen] = useState(false)
 
   // Flag dialog
   const [flagDialogOpen, setFlagDialogOpen] = useState(false)
@@ -171,7 +176,9 @@ export default function AdminProductsPage() {
         description: p.description || `${p.name} ürünü`,
         tags: p.tags,
         specs: p.specs,
-        images: ['/images/products/coffee-default.jpg'],
+        images: p.imageDataUrl
+          ? [p.imageDataUrl]
+          : ['/images/products/coffee-default.jpg'],
         moq: 1,
         leadTimeDays: 3,
         availability: 'in_stock',
@@ -362,6 +369,10 @@ export default function AdminProductsPage() {
       description="Platform ürünlerini yönetin ve modere edin"
     >
       <div className="flex justify-end gap-2 mb-4">
+        <Button variant="outline" onClick={() => setPdfImageModalOpen(true)}>
+          <Images className="mr-2 h-4 w-4" />
+          PDF Görselleri
+        </Button>
         <Button variant="outline" onClick={() => setImportModalOpen(true)}>
           <Upload className="mr-2 h-4 w-4" />
           Import
@@ -419,6 +430,12 @@ export default function AdminProductsPage() {
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
         onImport={handleImport}
+      />
+
+      {/* PDF Image Extractor */}
+      <PdfImageExtractorModal
+        open={pdfImageModalOpen}
+        onOpenChange={setPdfImageModalOpen}
       />
 
       {/* Flag Dialog */}
