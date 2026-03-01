@@ -228,12 +228,123 @@ export async function parsePDFProducts(file: File): Promise<ImportedProduct[]> {
     }
   }
 
-  // Remove document headers / footers
-  const cleanRows = allRows.filter(
+  const catalogRows = allRows.filter(
     (cols) => !CATALOG_JUNK.some((re) => re.test(cols.join(' ')))
   )
+  const catalogProducts = extractProductsFromRows(catalogRows)
+  if (catalogProducts.length > 0) return catalogProducts
 
-  return extractProductsFromRows(cleanRows)
+  // Fallback: table format (TL prices)
+  return extractProductsFromTableRows(allRows)
+}
+
+// ─── Table-format PDF parser (e.g. Discover price list) ──────────────────────
+// These PDFs use a table layout: product name on one line, then
+// PRODUCT_CODE PRICE TL KDV% QUANTITY on the next line.
+
+const TABLE_JUNK = [
+  /^sayfa\s*\d/i,
+  /fiyat\s*güncelleme/i,
+  /revizyon\s*:/i,
+  /^ürün\s*adı/i,
+  /resmi\s*kod/i,
+  /kdv\s*dahil/i,
+  /adet.*karton/i,
+  /katalog\s*sayfa/i,
+  /^fiyat\s*listesi$/i,
+  /fiyatlarımıza/i,
+  /^page\s+\d/i,
+]
+
+function extractTLPrice(text: string): number {
+  const m = text.match(/(\d[\d.]*(?:,\d{1,2})?)\s*TL\b/i)
+  return m ? parseTurkishNumber(m[1]) : 0
+}
+
+// Product code: 2+ uppercase letters followed by 3+ digits (e.g. DSR0085)
+const TABLE_CODE_RE = /^[A-Z]{2,}\d{3,}/
+
+function isTableProductLine(text: string): boolean {
+  return TABLE_CODE_RE.test(text.trim()) && extractTLPrice(text) > 0
+}
+
+function extractProductsFromTableRows(allRows: string[][]): ImportedProduct[] {
+  const cleanRows = allRows.filter(
+    (cols) => !TABLE_JUNK.some((re) => re.test(cols.join(' ')))
+  )
+
+  // Detect brand from the document header (short all-caps line near the top)
+  let detectedBrand = ''
+  for (let i = 0; i < Math.min(15, cleanRows.length); i++) {
+    const text = cleanRows[i].join(' ').trim()
+    if (text.length > 2 && text.length < 40 && /^[A-ZÇĞİÖŞÜ\s]+$/.test(text)) {
+      detectedBrand = text
+      break
+    }
+  }
+
+  const products: ImportedProduct[] = []
+
+  for (let i = 0; i < cleanRows.length; i++) {
+    const rowText = cleanRows[i].join(' ').trim()
+    if (!isTableProductLine(rowText)) continue
+
+    const price = extractTLPrice(rowText)
+
+    // Product name = nearest previous non-junk, non-detail line
+    let name = ''
+    for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+      const prev = cleanRows[j].join(' ').trim()
+      if (!prev) continue
+      if (isTableProductLine(prev)) break
+      name = prev
+      break
+    }
+    if (!name || name.length < 3) continue
+
+    // Brand: use detected header brand, or first word of product name
+    const brand = detectedBrand || name.split(/\s+/)[0] || ''
+
+    // Optional description from next non-detail line
+    let description = ''
+    if (i + 1 < cleanRows.length) {
+      const next = cleanRows[i + 1].join(' ').trim()
+      if (!isTableProductLine(next) && next.length > 2) {
+        description = next
+      }
+    }
+
+    // Specs: product code + KDV rate
+    const specs: { key: string; value: string }[] = []
+    const codeMatch = rowText.match(/^([A-Z]{2,}\d[\w]*)/i)
+    if (codeMatch) specs.push({ key: 'Ürün Kodu', value: codeMatch[1] })
+    const kdvMatch = rowText.match(/(\d+)\s*%/)
+    if (kdvMatch) specs.push({ key: 'KDV Oranı', value: `%${kdvMatch[1]}` })
+    const qtyMatch = rowText.match(/%\s*\d+\s+(\d+)$/)
+    if (qtyMatch) specs.push({ key: 'Adet/Karton', value: qtyMatch[1] })
+
+    // Guess category from name/brand
+    const lower = (name + ' ' + brand).toLowerCase()
+    let categoryId = 'cleaning'
+    if (/kahve|espresso|filtre/.test(lower)) categoryId = 'coffee'
+    else if (/çay|tea/.test(lower)) categoryId = 'tea'
+    else if (/ambalaj|bardak|kap/.test(lower)) categoryId = 'packaging'
+    else if (/ekipman|makine/.test(lower)) categoryId = 'equipment'
+
+    products.push({
+      name,
+      categoryId,
+      brand,
+      vendorId: '',
+      priceMin: price,
+      priceMax: price,
+      description,
+      tags: [],
+      specs,
+    })
+  }
+
+  return products
 }
 
 // Shared product-detection logic (used by both parsePDFProducts and parsePDFWithImages)
@@ -685,10 +796,16 @@ export async function parsePDFWithImages(
 
     // ── Products ─────────────────────────────────────────────────
     const rows = buildPageRows(textContent)
-    const cleanRows = rows
-      .filter((cols) => cols.some((c) => c.trim()))
-      .filter((cols) => !CATALOG_JUNK.some((re) => re.test(cols.join(' '))))
-    const pageProducts = extractProductsFromRows(cleanRows)
+    const nonEmptyRows = rows.filter((cols) => cols.some((c) => c.trim()))
+    // Try catalog format (₺) first, then table format (TL)
+    const catalogRows = nonEmptyRows.filter(
+      (cols) => !CATALOG_JUNK.some((re) => re.test(cols.join(' ')))
+    )
+    const catalogProducts = extractProductsFromRows(catalogRows)
+    const pageProducts =
+      catalogProducts.length > 0
+        ? catalogProducts
+        : extractProductsFromTableRows(nonEmptyRows)
 
     // ── Match by index (both are top→bottom on the page) ─────────
     pageProducts.forEach((p, i) => {
