@@ -1,7 +1,8 @@
 import { Product } from '@/types'
 import { products as mockProducts, getProductWithRelations } from './products'
+import { supabase, supabaseEnabled } from '@/lib/supabase'
 
-const PRODUCT_MODERATION_KEY = 'kafe-market-product-moderation'
+// ─── Types ───────────────────────────────────────────────────────
 
 interface ProductModeration {
   isActive: boolean
@@ -9,211 +10,7 @@ interface ProductModeration {
   flagReason?: string
 }
 
-// Load product moderation overrides from localStorage
-function getModerationOverrides(): Record<string, ProductModeration> {
-  if (typeof window === 'undefined') return {}
-
-  try {
-    const stored = localStorage.getItem(PRODUCT_MODERATION_KEY)
-    if (stored) {
-      return JSON.parse(stored) as Record<string, ProductModeration>
-    }
-  } catch (error) {
-    console.error('Failed to load product moderation:', error)
-  }
-  return {}
-}
-
-// Save product moderation overrides to localStorage
-function saveModerationOverrides(
-  overrides: Record<string, ProductModeration>
-): void {
-  if (typeof window === 'undefined') return
-
-  try {
-    localStorage.setItem(PRODUCT_MODERATION_KEY, JSON.stringify(overrides))
-  } catch (error) {
-    console.error('Failed to save product moderation:', error)
-  }
-}
-
-// Apply moderation to a product
-function applyModeration(product: Product): Product {
-  const overrides = getModerationOverrides()
-  const moderation = overrides[product.id]
-
-  if (moderation) {
-    return {
-      ...product,
-      isActive: moderation.isActive,
-      flagged: moderation.flagged,
-      flagReason: moderation.flagReason,
-    }
-  }
-
-  // Default: product is active and not flagged
-  return {
-    ...product,
-    isActive: product.isActive !== false,
-    flagged: product.flagged || false,
-  }
-}
-
-// Get all products with moderation applied (for admin)
-export function getAllProductsForAdmin(): Product[] {
-  const adminStored = typeof window !== 'undefined'
-    ? (() => {
-        try {
-          const stored = localStorage.getItem('kafe-market-admin-products')
-          return stored ? (JSON.parse(stored) as Product[]) : []
-        } catch {
-          return [] as Product[]
-        }
-      })()
-    : []
-
-  return [...mockProducts, ...adminStored].map((p) =>
-    applyModeration(getProductWithRelations(p))
-  )
-}
-
-// Get product by ID with moderation applied
-export function getProductForAdmin(id: string): Product | undefined {
-  const product = mockProducts.find((p) => p.id === id)
-  if (product) {
-    return applyModeration(getProductWithRelations(product))
-  }
-  return undefined
-}
-
-// Toggle product active status
-export function toggleProductActive(id: string): Product | null {
-  const product = mockProducts.find((p) => p.id === id)
-  if (!product) return null
-
-  const overrides = getModerationOverrides()
-  const current = overrides[id] || { isActive: true, flagged: false }
-
-  overrides[id] = {
-    ...current,
-    isActive: !current.isActive,
-  }
-
-  saveModerationOverrides(overrides)
-
-  return applyModeration(getProductWithRelations(product))
-}
-
-// Flag a product for review
-export function flagProduct(id: string, reason: string): Product | null {
-  const product = mockProducts.find((p) => p.id === id)
-  if (!product) return null
-
-  const overrides = getModerationOverrides()
-  const current = overrides[id] || { isActive: true, flagged: false }
-
-  overrides[id] = {
-    ...current,
-    flagged: true,
-    flagReason: reason,
-  }
-
-  saveModerationOverrides(overrides)
-
-  return applyModeration(getProductWithRelations(product))
-}
-
-// Unflag a product
-export function unflagProduct(id: string): Product | null {
-  const product = mockProducts.find((p) => p.id === id)
-  if (!product) return null
-
-  const overrides = getModerationOverrides()
-  const current = overrides[id] || { isActive: true, flagged: false }
-
-  overrides[id] = {
-    ...current,
-    flagged: false,
-    flagReason: undefined,
-  }
-
-  saveModerationOverrides(overrides)
-
-  return applyModeration(getProductWithRelations(product))
-}
-
-// Hide product (set isActive to false)
-export function hideProduct(id: string): Product | null {
-  const product = mockProducts.find((p) => p.id === id)
-  if (!product) return null
-
-  const overrides = getModerationOverrides()
-  const current = overrides[id] || { isActive: true, flagged: false }
-
-  overrides[id] = {
-    ...current,
-    isActive: false,
-  }
-
-  saveModerationOverrides(overrides)
-
-  return applyModeration(getProductWithRelations(product))
-}
-
-// Show product (set isActive to true)
-export function showProduct(id: string): Product | null {
-  const product = mockProducts.find((p) => p.id === id)
-  if (!product) return null
-
-  const overrides = getModerationOverrides()
-  const current = overrides[id] || { isActive: true, flagged: false }
-
-  overrides[id] = {
-    ...current,
-    isActive: true,
-  }
-
-  saveModerationOverrides(overrides)
-
-  return applyModeration(getProductWithRelations(product))
-}
-
-// Check if product is active
-export function isProductActive(id: string): boolean {
-  const overrides = getModerationOverrides()
-  const moderation = overrides[id]
-
-  if (moderation) {
-    return moderation.isActive
-  }
-
-  // Default: products are active
-  return true
-}
-
-// ─── Admin product CRUD ─────────────────────────────────────────
-
-const ADMIN_PRODUCTS_KEY = 'kafe-market-admin-products'
-
-function getAdminStoredProducts(): Product[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const stored = localStorage.getItem(ADMIN_PRODUCTS_KEY)
-    if (stored) return JSON.parse(stored) as Product[]
-  } catch {
-    // ignore
-  }
-  return []
-}
-
-function saveAdminProducts(prods: Product[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(ADMIN_PRODUCTS_KEY, JSON.stringify(prods))
-  } catch (error) {
-    console.error('Failed to save admin products:', error)
-  }
-}
+// ─── Slug helper ─────────────────────────────────────────────────
 
 function generateSlug(name: string): string {
   return name
@@ -230,11 +27,180 @@ function generateSlug(name: string): string {
     .trim()
 }
 
-export function createAdminProduct(
-  data: Omit<Product, 'id' | 'slug' | 'createdAt'>
-): Product {
-  const adminProducts = getAdminStoredProducts()
+// ─── Apply moderation ─────────────────────────────────────────────
 
+function applyModeration(
+  product: Product,
+  overrides: Record<string, ProductModeration>
+): Product {
+  const mod = overrides[product.id]
+  if (mod) {
+    return {
+      ...product,
+      isActive: mod.isActive,
+      flagged: mod.flagged,
+      flagReason: mod.flagReason,
+    }
+  }
+  return {
+    ...product,
+    isActive: product.isActive !== false,
+    flagged: product.flagged || false,
+  }
+}
+
+// ─── Supabase helpers ─────────────────────────────────────────────
+
+async function fetchOverridesFromSupabase(): Promise<Record<string, ProductModeration>> {
+  try {
+    const { data, error } = await supabase
+      .from('product_overrides')
+      .select('id, is_active, flagged, flag_reason')
+    if (error) throw error
+    const result: Record<string, ProductModeration> = {}
+    for (const row of data ?? []) {
+      result[row.id] = {
+        isActive: row.is_active,
+        flagged: row.flagged,
+        flagReason: row.flag_reason ?? undefined,
+      }
+    }
+    return result
+  } catch (err) {
+    console.error('Supabase: failed to fetch product overrides:', err)
+    return {}
+  }
+}
+
+async function fetchAdminProductsFromSupabase(): Promise<Product[]> {
+  try {
+    const { data, error } = await supabase
+      .from('admin_products')
+      .select('data')
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map((row) => row.data as Product)
+  } catch (err) {
+    console.error('Supabase: failed to fetch admin products:', err)
+    return []
+  }
+}
+
+// ─── localStorage fallbacks ───────────────────────────────────────
+
+const PRODUCT_MODERATION_KEY = 'kafe-market-product-moderation'
+const ADMIN_PRODUCTS_KEY = 'kafe-market-admin-products'
+
+function getLocalOverrides(): Record<string, ProductModeration> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const stored = localStorage.getItem(PRODUCT_MODERATION_KEY)
+    return stored ? (JSON.parse(stored) as Record<string, ProductModeration>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveLocalOverrides(overrides: Record<string, ProductModeration>): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(PRODUCT_MODERATION_KEY, JSON.stringify(overrides))
+  } catch {
+    // ignore
+  }
+}
+
+function getLocalAdminProducts(): Product[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(ADMIN_PRODUCTS_KEY)
+    return stored ? (JSON.parse(stored) as Product[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveLocalAdminProducts(prods: Product[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(ADMIN_PRODUCTS_KEY, JSON.stringify(prods))
+  } catch {
+    // ignore
+  }
+}
+
+// ─── Overrides: read / write ──────────────────────────────────────
+
+async function getModerationOverrides(): Promise<Record<string, ProductModeration>> {
+  if (supabaseEnabled) return fetchOverridesFromSupabase()
+  return getLocalOverrides()
+}
+
+async function upsertOverride(id: string, patch: Partial<ProductModeration>): Promise<void> {
+  if (supabaseEnabled) {
+    // Fetch current row to merge
+    const current = (await fetchOverridesFromSupabase())[id] ?? {
+      isActive: true,
+      flagged: false,
+    }
+    const merged = { ...current, ...patch }
+    const { error } = await supabase.from('product_overrides').upsert(
+      {
+        id,
+        is_active: merged.isActive,
+        flagged: merged.flagged,
+        flag_reason: merged.flagReason ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
+    if (error) console.error('Supabase: failed to upsert override:', error)
+  } else {
+    const overrides = getLocalOverrides()
+    const current = overrides[id] ?? { isActive: true, flagged: false }
+    overrides[id] = { ...current, ...patch }
+    saveLocalOverrides(overrides)
+  }
+}
+
+// ─── Admin products: read / write ─────────────────────────────────
+
+async function getAdminStoredProducts(): Promise<Product[]> {
+  if (supabaseEnabled) return fetchAdminProductsFromSupabase()
+  return getLocalAdminProducts()
+}
+
+// ─── Public API ───────────────────────────────────────────────────
+
+export async function getAllProductsForAdmin(): Promise<Product[]> {
+  const [adminStored, overrides] = await Promise.all([
+    getAdminStoredProducts(),
+    getModerationOverrides(),
+  ])
+  return [...mockProducts, ...adminStored].map((p) =>
+    applyModeration(getProductWithRelations(p), overrides)
+  )
+}
+
+export async function hideProduct(id: string): Promise<void> {
+  await upsertOverride(id, { isActive: false })
+}
+
+export async function showProduct(id: string): Promise<void> {
+  await upsertOverride(id, { isActive: true })
+}
+
+export async function flagProduct(id: string, reason: string): Promise<void> {
+  await upsertOverride(id, { flagged: true, flagReason: reason })
+}
+
+export async function unflagProduct(id: string): Promise<void> {
+  await upsertOverride(id, { flagged: false, flagReason: undefined })
+}
+
+export async function createAdminProduct(
+  data: Omit<Product, 'id' | 'slug' | 'createdAt'>
+): Promise<Product> {
   const newProduct: Product = {
     ...data,
     id: `admin-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -242,76 +208,110 @@ export function createAdminProduct(
     createdAt: new Date().toISOString(),
   }
 
-  adminProducts.push(newProduct)
-  saveAdminProducts(adminProducts)
+  if (supabaseEnabled) {
+    const { error } = await supabase
+      .from('admin_products')
+      .insert({ id: newProduct.id, data: newProduct })
+    if (error) console.error('Supabase: failed to create admin product:', error)
+  } else {
+    const prods = getLocalAdminProducts()
+    prods.push(newProduct)
+    saveLocalAdminProducts(prods)
+  }
 
   return getProductWithRelations(newProduct)
 }
 
-export function updateAdminProduct(
+export async function updateAdminProduct(
   id: string,
-  data: Partial<Omit<Product, 'id' | 'createdAt'>>
-): Product | null {
-  const adminProducts = getAdminStoredProducts()
-  const adminIndex = adminProducts.findIndex((p) => p.id === id)
+  updates: Partial<Omit<Product, 'id' | 'createdAt'>>
+): Promise<Product | null> {
+  const adminProducts = await getAdminStoredProducts()
+  const existing = adminProducts.find((p) => p.id === id)
 
-  if (adminIndex !== -1) {
-    adminProducts[adminIndex] = {
-      ...adminProducts[adminIndex],
-      ...data,
-      slug: data.name
-        ? generateSlug(data.name)
-        : adminProducts[adminIndex].slug,
+  if (existing) {
+    const updated: Product = {
+      ...existing,
+      ...updates,
+      slug: updates.name ? generateSlug(updates.name) : existing.slug,
     }
-    saveAdminProducts(adminProducts)
-    return getProductWithRelations(adminProducts[adminIndex])
+    if (supabaseEnabled) {
+      const { error } = await supabase
+        .from('admin_products')
+        .update({ data: updated, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) console.error('Supabase: failed to update admin product:', error)
+    } else {
+      const prods = getLocalAdminProducts()
+      const idx = prods.findIndex((p) => p.id === id)
+      if (idx !== -1) {
+        prods[idx] = updated
+        saveLocalAdminProducts(prods)
+      }
+    }
+    return getProductWithRelations(updated)
   }
 
-  // If it's a hardcoded product, clone it with updates into admin storage & hide original
+  // Hardcoded product: clone into admin storage and hide original
   const hardcoded = mockProducts.find((p) => p.id === id)
   if (hardcoded) {
-    const updatedProduct: Product = {
+    const updated: Product = {
       ...hardcoded,
-      ...data,
-      slug: data.name ? generateSlug(data.name) : hardcoded.slug,
+      ...updates,
+      slug: updates.name ? generateSlug(updates.name) : hardcoded.slug,
     }
-    adminProducts.push(updatedProduct)
-    saveAdminProducts(adminProducts)
-    hideProduct(id)
-    return getProductWithRelations(updatedProduct)
+    if (supabaseEnabled) {
+      const { error } = await supabase
+        .from('admin_products')
+        .insert({ id: updated.id, data: updated })
+      if (error) console.error('Supabase: failed to clone hardcoded product:', error)
+    } else {
+      const prods = getLocalAdminProducts()
+      prods.push(updated)
+      saveLocalAdminProducts(prods)
+    }
+    await hideProduct(id)
+    return getProductWithRelations(updated)
   }
 
   return null
 }
 
-export function deleteAdminProduct(id: string): boolean {
-  const adminProducts = getAdminStoredProducts()
-  const adminIndex = adminProducts.findIndex((p) => p.id === id)
+export async function deleteAdminProduct(id: string): Promise<boolean> {
+  const adminProducts = await getAdminStoredProducts()
+  const isAdminProduct = adminProducts.some((p) => p.id === id)
 
-  if (adminIndex !== -1) {
-    adminProducts.splice(adminIndex, 1)
-    saveAdminProducts(adminProducts)
+  if (isAdminProduct) {
+    if (supabaseEnabled) {
+      const { error } = await supabase.from('admin_products').delete().eq('id', id)
+      if (error) {
+        console.error('Supabase: failed to delete admin product:', error)
+        return false
+      }
+    } else {
+      const prods = getLocalAdminProducts().filter((p) => p.id !== id)
+      saveLocalAdminProducts(prods)
+    }
     return true
   }
 
-  // If it's a hardcoded product, hide it via moderation
+  // Hardcoded product: hide via moderation
   const hardcoded = mockProducts.find((p) => p.id === id)
   if (hardcoded) {
-    hideProduct(id)
+    await hideProduct(id)
     return true
   }
 
   return false
 }
 
-// Get product stats for admin dashboard
-export function getProductStats(): {
+export async function getProductStats(): Promise<{
   total: number
   active: number
   hidden: number
   flagged: number
-} {
-  const allProducts = getAllProductsForAdmin()
+}> {
+  const allProducts = await getAllProductsForAdmin()
   return {
     total: allProducts.length,
     active: allProducts.filter((p) => p.isActive !== false).length,

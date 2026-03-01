@@ -1090,7 +1090,7 @@ export const products: Product[] = [
   },
 ]
 
-// Admin-stored products (created/imported via admin panel)
+// Admin-stored products (local fallback — Supabase path is in admin-products.ts)
 function getAdminStoredProducts(): Product[] {
   if (typeof window === 'undefined') return []
   try {
@@ -1129,29 +1129,56 @@ export function getProductById(id: string): Product | undefined {
   return undefined
 }
 
+export interface CatalogOverrides {
+  /** product id → isActive */
+  moderation: Record<string, { isActive: boolean }>
+  /** extra products fetched from Supabase admin_products table */
+  adminProducts: Product[]
+}
+
+function resolveAllProducts(extra: Product[]): Product[] {
+  // merge mock products with Supabase/localStorage admin products
+  const localAdmin = getAdminStoredProducts()
+  // prefer Supabase (extra) over localStorage when both are present
+  const adminList = extra.length > 0 ? extra : localAdmin
+  return [...products, ...adminList]
+}
+
+function applyModerationFilter(
+  list: Product[],
+  moderation: Record<string, { isActive: boolean }>
+): Product[] {
+  return list.filter((p) => {
+    const mod = moderation[p.id]
+    return mod ? mod.isActive !== false : true
+  })
+}
+
+function getLocalModeration(): Record<string, { isActive: boolean }> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const stored = localStorage.getItem('kafe-market-product-moderation')
+    return stored
+      ? (JSON.parse(stored) as Record<string, { isActive: boolean }>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 // Filtreleme ve sayfalama
-export function getProducts(params: FilterParams): PaginatedResult<Product> {
+export function getProducts(
+  params: FilterParams,
+  overrides?: CatalogOverrides
+): PaginatedResult<Product> {
   const pageSize = 12
   const page = params.page || 1
 
-  let filtered = [...products, ...getAdminStoredProducts()]
+  let filtered = resolveAllProducts(overrides?.adminProducts ?? [])
 
-  // Filter out hidden products (isActive = false)
-  // Check localStorage for product moderation status
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('kafe-market-product-moderation')
-      if (stored) {
-        const moderation = JSON.parse(stored) as Record<string, { isActive: boolean }>
-        filtered = filtered.filter((p) => {
-          const mod = moderation[p.id]
-          return mod ? mod.isActive !== false : true
-        })
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
+  // Filter out hidden products
+  const moderation = overrides?.moderation ?? getLocalModeration()
+  filtered = applyModerationFilter(filtered, moderation)
 
   // Kategori filtresi
   if (params.category) {
@@ -1229,30 +1256,17 @@ export function getProducts(params: FilterParams): PaginatedResult<Product> {
 }
 
 // Benzersiz markalar
-export function getBrands(): string[] {
-  const brands = new Set([...products, ...getAdminStoredProducts()].map((p) => p.brand))
+export function getBrands(extra: Product[] = []): string[] {
+  const brands = new Set(resolveAllProducts(extra).map((p) => p.brand))
   return Array.from(brands).sort()
 }
 
 // Featured ürünler
-export function getFeaturedProducts(): Product[] {
-  let filtered = [...products, ...getAdminStoredProducts()].filter((p) => p.featured)
-
-  // Filter out hidden products
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('kafe-market-product-moderation')
-      if (stored) {
-        const moderation = JSON.parse(stored) as Record<string, { isActive: boolean }>
-        filtered = filtered.filter((p) => {
-          const mod = moderation[p.id]
-          return mod ? mod.isActive !== false : true
-        })
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
-
+export function getFeaturedProducts(overrides?: CatalogOverrides): Product[] {
+  let filtered = resolveAllProducts(overrides?.adminProducts ?? []).filter(
+    (p) => p.featured
+  )
+  const moderation = overrides?.moderation ?? getLocalModeration()
+  filtered = applyModerationFilter(filtered, moderation)
   return filtered.map(getProductWithRelations).slice(0, 4)
 }

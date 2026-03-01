@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Breadcrumbs } from '@/components/catalog'
 import { ProductGallery, SpecsTable, AddToCartButton } from '@/components/product'
-import { getProductBySlug } from '@/lib/data'
+import { getProductBySlug, getProductWithRelations } from '@/lib/data'
+import { supabase, supabaseEnabled } from '@/lib/supabase'
 import { Product } from '@/types'
 
 const availabilityLabels: Record<
@@ -26,7 +27,34 @@ export function ProductPageClient({ slug }: { slug: string }) {
   const [product, setProduct] = useState<Product | null | undefined>(undefined)
 
   useEffect(() => {
-    setProduct(getProductBySlug(slug) ?? null)
+    async function load() {
+      // 1. Try mock/localStorage products
+      const local = getProductBySlug(slug)
+      if (local) {
+        setProduct(local)
+        return
+      }
+
+      // 2. Try Supabase admin_products
+      if (supabaseEnabled) {
+        try {
+          const { data } = await supabase
+            .from('admin_products')
+            .select('data')
+            .eq('data->>slug', slug)
+            .single()
+          if (data) {
+            setProduct(getProductWithRelations(data.data as Product))
+            return
+          }
+        } catch {
+          // not found
+        }
+      }
+
+      setProduct(null)
+    }
+    load()
   }, [slug])
 
   // Loading

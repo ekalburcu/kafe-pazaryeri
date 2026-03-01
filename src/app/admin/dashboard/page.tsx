@@ -55,21 +55,23 @@ export default function AdminDashboardPage() {
 
       // Load stats
       setVendorStats(getVendorStats())
-      setProductStats(getProductStats())
       setCategoryStats(getCategoryStats())
 
       // Load pending vendors
       setPendingVendors(getVendorsByStatus('pending'))
 
-      // Load flagged products
-      const allProducts = getAllProductsForAdmin()
-      setFlaggedProducts(allProducts.filter((p) => p.flagged).slice(0, 5))
-
       // Load recent requests
       const requests = getAllRequests()
       setRecentRequests(requests.slice(0, 5))
 
-      setIsLoading(false)
+      // Load product stats + flagged products (async)
+      Promise.all([getProductStats(), getAllProductsForAdmin()]).then(
+        ([stats, allProducts]) => {
+          setProductStats(stats)
+          setFlaggedProducts(allProducts.filter((p) => p.flagged).slice(0, 5))
+          setIsLoading(false)
+        }
+      )
     }
   }, [authLoading, isAuthenticated, user, router])
 

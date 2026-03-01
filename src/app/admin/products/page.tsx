@@ -94,8 +94,8 @@ export default function AdminProductsPage() {
 
   const vendors = getAllVendors()
 
-  const loadProducts = () => {
-    setProducts(getAllProductsForAdmin())
+  const loadProducts = async () => {
+    setProducts(await getAllProductsForAdmin())
   }
 
   useEffect(() => {
@@ -110,8 +110,7 @@ export default function AdminProductsPage() {
         return
       }
 
-      loadProducts()
-      setIsLoading(false)
+      loadProducts().then(() => setIsLoading(false))
     }
   }, [authLoading, isAuthenticated, user, router])
 
@@ -135,15 +134,15 @@ export default function AdminProductsPage() {
     }
 
     if (editingProduct) {
-      updateAdminProduct(editingProduct.id, productData)
+      await updateAdminProduct(editingProduct.id, productData)
       toast.success('Ürün güncellendi')
     } else {
-      createAdminProduct(productData)
+      await createAdminProduct(productData)
       toast.success('Ürün eklendi')
     }
 
     setFormDialogOpen(false)
-    loadProducts()
+    await loadProducts()
   }
 
   // ─── Delete ──────────────────────────────────────────────────
@@ -152,53 +151,53 @@ export default function AdminProductsPage() {
     setDeleteDialogOpen(true)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (productToDelete) {
-      deleteAdminProduct(productToDelete.id)
+      await deleteAdminProduct(productToDelete.id)
       toast.success('Ürün silindi')
     }
     setDeleteDialogOpen(false)
     setProductToDelete(null)
-    loadProducts()
+    await loadProducts()
   }
 
   // ─── Import ──────────────────────────────────────────────────
-  const handleImport = (importedProducts: ImportedProduct[]) => {
-    let count = 0
-    for (const p of importedProducts) {
-      createAdminProduct({
-        name: p.name,
-        categoryId: p.categoryId,
-        brand: p.brand,
-        vendorId: p.vendorId || 'kahve-dunyasi',
-        priceMin: p.priceMin,
-        priceMax: p.priceMax,
-        description: p.description || `${p.name} ürünü`,
-        tags: p.tags,
-        specs: p.specs,
-        images: p.imageDataUrl
-          ? [p.imageDataUrl]
-          : ['/images/products/coffee-default.jpg'],
-        moq: 1,
-        leadTimeDays: 3,
-        availability: 'in_stock',
-      })
-      count++
-    }
-    toast.success(`${count} ürün başarıyla eklendi`)
-    loadProducts()
+  const handleImport = async (importedProducts: ImportedProduct[]) => {
+    await Promise.all(
+      importedProducts.map((p) =>
+        createAdminProduct({
+          name: p.name,
+          categoryId: p.categoryId,
+          brand: p.brand,
+          vendorId: p.vendorId || 'kahve-dunyasi',
+          priceMin: p.priceMin,
+          priceMax: p.priceMax,
+          description: p.description || `${p.name} ürünü`,
+          tags: p.tags,
+          specs: p.specs,
+          images: p.imageDataUrl
+            ? [p.imageDataUrl]
+            : ['/images/products/coffee-default.jpg'],
+          moq: 1,
+          leadTimeDays: 3,
+          availability: 'in_stock',
+        })
+      )
+    )
+    toast.success(`${importedProducts.length} ürün başarıyla eklendi`)
+    await loadProducts()
   }
 
   // ─── Show / Hide ─────────────────────────────────────────────
-  const handleToggleActive = (product: Product) => {
+  const handleToggleActive = async (product: Product) => {
     if (product.isActive === false) {
-      showProduct(product.id)
+      await showProduct(product.id)
       toast.success('Ürün katalogda gösterilecek')
     } else {
-      hideProduct(product.id)
+      await hideProduct(product.id)
       toast.success('Ürün katalogdan gizlendi')
     }
-    loadProducts()
+    await loadProducts()
   }
 
   // ─── Flag ────────────────────────────────────────────────────
@@ -208,10 +207,10 @@ export default function AdminProductsPage() {
     setFlagDialogOpen(true)
   }
 
-  const handleFlag = () => {
+  const handleFlag = async () => {
     if (productToFlag) {
       if (flagReason.trim()) {
-        flagProduct(productToFlag.id, flagReason)
+        await flagProduct(productToFlag.id, flagReason)
         toast.success('Ürün işaretlendi')
       } else {
         toast.error('Sebep giriniz')
@@ -221,13 +220,13 @@ export default function AdminProductsPage() {
     setFlagDialogOpen(false)
     setProductToFlag(null)
     setFlagReason('')
-    loadProducts()
+    await loadProducts()
   }
 
-  const handleUnflag = (product: Product) => {
-    unflagProduct(product.id)
+  const handleUnflag = async (product: Product) => {
+    await unflagProduct(product.id)
     toast.success('İşaret kaldırıldı')
-    loadProducts()
+    await loadProducts()
   }
 
   // ─── Columns ─────────────────────────────────────────────────

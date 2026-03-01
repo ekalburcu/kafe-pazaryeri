@@ -11,12 +11,14 @@ import { FiltersSidebar } from './filters-sidebar'
 import { SortDropdown } from './sort-dropdown'
 import { MobileFilters } from './mobile-filters'
 import { categories, vendors, getProducts, getBrands } from '@/lib/data'
+import { useCatalogOverrides } from '@/hooks/use-catalog-overrides'
 
 type SortOption = 'popular' | 'newest' | 'price_asc' | 'price_desc'
 
 export function CatalogContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const catalogOverrides = useCatalogOverrides()
 
   // URL'den parametreleri oku
   const selectedCategory = searchParams.get('category') || undefined
@@ -42,19 +44,25 @@ export function CatalogContent() {
   )
 
   // Marka listesi
-  const brands = useMemo(() => getBrands(), [])
+  const brands = useMemo(
+    () => getBrands(catalogOverrides.adminProducts),
+    [catalogOverrides.adminProducts]
+  )
 
   // Ürünleri filtrele
   const result = useMemo(() => {
-    return getProducts({
-      category: selectedCategory,
-      brand: selectedBrands[0],
-      vendor: selectedVendors[0],
-      availability: selectedAvailability[0],
-      search: searchQuery,
-      sort: sortOption,
-      page: currentPage,
-    })
+    return getProducts(
+      {
+        category: selectedCategory,
+        brand: selectedBrands[0],
+        vendor: selectedVendors[0],
+        availability: selectedAvailability[0],
+        search: searchQuery,
+        sort: sortOption,
+        page: currentPage,
+      },
+      catalogOverrides
+    )
   }, [
     selectedCategory,
     selectedBrands,
@@ -63,6 +71,7 @@ export function CatalogContent() {
     searchQuery,
     sortOption,
     currentPage,
+    catalogOverrides,
   ])
 
   // URL'yi güncelle
