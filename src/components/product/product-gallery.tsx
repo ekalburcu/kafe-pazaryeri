@@ -43,7 +43,7 @@ export function ProductGallery({
             src={realImages[currentIndex]}
             alt={productName}
             fill
-            className="object-cover"
+            className="object-contain p-4"
             sizes="(max-width: 768px) 100vw, 50vw"
             priority
           />

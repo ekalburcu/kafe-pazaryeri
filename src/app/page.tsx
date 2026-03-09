@@ -3,6 +3,7 @@ import { Coffee, Package, Truck, Shield, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { FeaturedProducts } from '@/components/home/featured-products'
 
 const categories = [
   { name: 'Kahve & İçecek', count: 150, href: '/catalog?category=coffee' },
@@ -85,6 +86,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Featured Products */}
+      <FeaturedProducts />
 
       {/* Features Section */}
       <section className="bg-muted/30 py-16">

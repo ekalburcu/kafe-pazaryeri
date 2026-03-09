@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,6 +72,38 @@ export default function AdminProductsPage() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) =>
+      prev.size === products.length
+        ? new Set()
+        : new Set(products.map((p) => p.id))
+    )
+
+  const selectByVendor = (vendorId: string) =>
+    setSelectedIds(new Set(products.filter((p) => p.vendorId === vendorId).map((p) => p.id)))
+
+  const selectByBrand = (brand: string) =>
+    setSelectedIds(new Set(products.filter((p) => p.brand === brand).map((p) => p.id)))
+
+  const handleBulkDelete = async () => {
+    await Promise.all([...selectedIds].map((id) => deleteAdminProduct(id)))
+    toast.success(`${selectedIds.size} ürün silindi`)
+    setSelectedIds(new Set())
+    setBulkDeleteOpen(false)
+    await loadProducts()
+  }
 
   // Add / Edit dialog
   const [formDialogOpen, setFormDialogOpen] = useState(false)
@@ -130,7 +163,7 @@ export default function AdminProductsPage() {
   const handleFormSubmit = async (data: ProductFormData) => {
     const productData = {
       ...data,
-      vendorId: formVendorId || 'kahve-dunyasi',
+      vendorId: formVendorId || '',
     }
 
     if (editingProduct) {
@@ -169,7 +202,7 @@ export default function AdminProductsPage() {
           name: p.name,
           categoryId: p.categoryId,
           brand: p.brand,
-          vendorId: p.vendorId || 'kahve-dunyasi',
+          vendorId: p.vendorId || '',
           priceMin: p.priceMin,
           priceMax: p.priceMax,
           description: p.description || `${p.name} ürünü`,
@@ -229,8 +262,28 @@ export default function AdminProductsPage() {
     await loadProducts()
   }
 
+  const uniqueVendors = [...new Map(products.filter((p) => p.vendorId).map((p) => [p.vendorId, p.vendor?.name || p.vendorId])).entries()]
+  const uniqueBrands = [...new Set(products.map((p) => p.brand).filter(Boolean))]
+
   // ─── Columns ─────────────────────────────────────────────────
   const columns: ColumnDef<Product>[] = [
+    {
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={products.length > 0 && selectedIds.size === products.length}
+          onCheckedChange={toggleSelectAll}
+          aria-label="Tümünü seç"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selectedIds.has(row.original.id)}
+          onCheckedChange={() => toggleSelect(row.original.id)}
+          aria-label="Seç"
+        />
+      ),
+    },
     {
       accessorKey: 'name',
       header: 'Ürün',
@@ -245,7 +298,7 @@ export default function AdminProductsPage() {
       accessorKey: 'vendor',
       header: 'Tedarikçi',
       cell: ({ row }) => (
-        <span className="text-sm">{row.original.vendor?.name || '-'}</span>
+        <span className="text-sm">{row.original.vendor?.name || row.original.vendorId || '-'}</span>
       ),
     },
     {
@@ -382,6 +435,56 @@ export default function AdminProductsPage() {
         </Button>
       </div>
 
+      {/* Bulk action toolbar */}
+      {selectedIds.size > 0 ? (
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-2 mb-2">
+          <span className="text-sm font-medium">{selectedIds.size} ürün seçildi</span>
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Seçimi Temizle
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setBulkDeleteOpen(true)}
+          >
+            <Trash2 className="mr-2 h-3 w-3" />
+            Seçilenleri Sil
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-muted-foreground">Toplu seç:</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">Tedarikçiye Göre</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {uniqueVendors.length === 0 && (
+                <DropdownMenuItem disabled>Tedarikçi yok</DropdownMenuItem>
+              )}
+              {uniqueVendors.map(([id, name]) => (
+                <DropdownMenuItem key={id} onClick={() => selectByVendor(id)}>
+                  {name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">Markaya Göre</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {uniqueBrands.map((brand) => (
+                <DropdownMenuItem key={brand} onClick={() => selectByBrand(brand)}>
+                  {brand}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={products}
@@ -464,6 +567,22 @@ export default function AdminProductsPage() {
             <Button onClick={handleFlag}>
               İşaretle
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirm Dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Toplu Silme</DialogTitle>
+            <DialogDescription>
+              Seçili <strong>{selectedIds.size} ürün</strong> kalıcı olarak silinecek. Bu işlem geri alınamaz.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>İptal</Button>
+            <Button variant="destructive" onClick={handleBulkDelete}>Sil</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

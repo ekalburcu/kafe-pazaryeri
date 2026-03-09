@@ -254,6 +254,8 @@ const TABLE_JUNK = [
   /^fiyat\s*listesi$/i,
   /fiyatlarımıza/i,
   /^page\s+\d/i,
+  /^yen[iİ]$/i,    // "YENİ" etiketi — İ (U+0130) JS /i flag ile eşleşmiyor, açık yazıldı
+  /^\d+[-–]\d+$/, // katalog sayfa numaraları: "1-2", "7-8" vb.
 ]
 
 function extractTLPrice(text: string): number {
@@ -261,11 +263,55 @@ function extractTLPrice(text: string): number {
   return m ? parseTurkishNumber(m[1]) : 0
 }
 
-// Product code: 2+ uppercase letters followed by 3+ digits (e.g. DSR0085)
-const TABLE_CODE_RE = /^[A-Z]{2,}\d{3,}/
+// Product code: e.g. DSR0085, KH-X117Y, EXL1969
+const TABLE_CODE_RE = /^[A-Z]{2,}-?[A-Z]?\d{3,}/
 
 function isTableProductLine(text: string): boolean {
   return TABLE_CODE_RE.test(text.trim()) && extractTLPrice(text) > 0
+}
+
+// Known company-type suffixes to strip when extracting name from domain
+const COMPANY_SUFFIXES = ['elektronik', 'elektrik', 'gida', 'gıda', 'tekstil', 'market', 'kafe', 'kimya', 'kozmetik', 'ambalaj', 'dis', 'tic', 'san']
+
+function domainToVendorName(domain: string): string {
+  const lower = domain.toLowerCase()
+  for (const suffix of COMPANY_SUFFIXES) {
+    if (lower.endsWith(suffix) && lower.length > suffix.length) {
+      const base = lower.slice(0, lower.length - suffix.length)
+      return base.charAt(0).toUpperCase() + base.slice(1)
+    }
+  }
+  return lower.charAt(0).toUpperCase() + lower.slice(1)
+}
+
+function detectVendorName(allRows: string[][]): string {
+  const allText = allRows.map((r) => r.join(' ').trim()).filter(Boolean)
+
+  // Try 1: header area — find "A.Ş." row, previous row = company name
+  for (let i = 1; i < Math.min(20, allText.length); i++) {
+    if (/A\.Ş\.|LTD\.|SANAYİ.*TİC/i.test(allText[i])) {
+      const prev = allText[i - 1]
+      if (prev.length > 1 && prev.length <= 30 && !/fiyat|listesi|kdv|sayfa|page/i.test(prev)) {
+        return prev
+      }
+      // Company name is part of the same row (e.g. "GÜLER ELEKTRONİK A.Ş.")
+      const m = allText[i].match(/^(.+?)\s+(?:ELEKTRONİK|KİMYA|SANAYİ|TİCARET|LTD)/i)
+      if (m) return m[1].trim()
+    }
+  }
+
+  // Try 2: scan all rows for website/email, extract company name from domain
+  // e.g. "www.gulerelektronik.com" → "Güler"
+  for (const text of allText) {
+    const m = text.match(/(?:www\.|@)([a-z0-9]+)\.(?:com\.tr|com\.net|net\.tr|com|net)/i)
+    if (m) {
+      const domain = m[1].toLowerCase()
+      if (/discover|mascot|nowa|exosual|jenix/.test(domain)) continue // skip brand domains
+      return domainToVendorName(domain)
+    }
+  }
+
+  return ''
 }
 
 function extractProductsFromTableRows(allRows: string[][]): ImportedProduct[] {
@@ -273,15 +319,8 @@ function extractProductsFromTableRows(allRows: string[][]): ImportedProduct[] {
     (cols) => !TABLE_JUNK.some((re) => re.test(cols.join(' ')))
   )
 
-  // Detect brand from the document header (short all-caps line near the top)
-  let detectedBrand = ''
-  for (let i = 0; i < Math.min(15, cleanRows.length); i++) {
-    const text = cleanRows[i].join(' ').trim()
-    if (text.length > 2 && text.length < 40 && /^[A-ZÇĞİÖŞÜ\s]+$/.test(text)) {
-      detectedBrand = text
-      break
-    }
-  }
+  // Brand is extracted per-product from the first word of the product name
+  const detectedVendor = detectVendorName(allRows)
 
   const products: ImportedProduct[] = []
 
@@ -291,19 +330,28 @@ function extractProductsFromTableRows(allRows: string[][]): ImportedProduct[] {
 
     const price = extractTLPrice(rowText)
 
-    // Product name = nearest previous non-junk, non-detail line
-    let name = ''
-    for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+    // Product name = collect all preceding non-code lines and join
+    // (product names can span multiple rows in the PDF)
+    const nameLines: string[] = []
+    for (let j = i - 1; j >= Math.max(0, i - 6); j--) {
       const prev = cleanRows[j].join(' ').trim()
       if (!prev) continue
       if (isTableProductLine(prev)) break
-      name = prev
-      break
+      nameLines.unshift(prev)
     }
+    let name = nameLines.join(' ').trim()
     if (!name || name.length < 3) continue
 
-    // Brand: use detected header brand, or first word of product name
-    const brand = detectedBrand || name.split(/\s+/)[0] || ''
+    // Strip leading non-name tokens (catalog page nums, "YENİ" badge) from product name
+    name = name.replace(/^(?:yen[iİ]|new|\d+[-–]\d+|\d+)\s+/i, '').trim()
+    if (!name || name.length < 3) continue
+
+    // Brand: first meaningful word of product name — skip labels like "YENİ"
+    // and catalog page numbers like "1-2", "7-8"
+    const NON_BRAND = /^(yen[iİ]|new|\d+[-–]\d+|\d+)$/i
+    const words = name.split(/\s+/)
+    const brandWord = words.find((w) => !NON_BRAND.test(w)) || words[0] || ''
+    const brand = brandWord
 
     // Optional description from next non-detail line
     let description = ''
@@ -335,7 +383,7 @@ function extractProductsFromTableRows(allRows: string[][]): ImportedProduct[] {
       name,
       categoryId,
       brand,
-      vendorId: '',
+      vendorId: detectedVendor,
       priceMin: price,
       priceMax: price,
       description,

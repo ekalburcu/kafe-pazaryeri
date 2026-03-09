@@ -4,6 +4,8 @@ import { useState, useRef, useCallback } from 'react'
 import { Upload, FileText, Download, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -37,7 +39,10 @@ export function ImportProductsModal({
   const [csvProducts, setCsvProducts] = useState<ImportedProduct[]>([])
   const [pdfText, setPdfText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [vendorInput, setVendorInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const vendorMissing = csvProducts.length > 0 && !csvProducts[0]?.vendorId
 
   const categories = getAllCategories()
 
@@ -97,14 +102,17 @@ export function ImportProductsModal({
     setCsvProducts([])
     setPdfText(null)
     setError(null)
+    setVendorInput('')
   }
 
   const handleImport = () => {
-    if (csvProducts.length > 0) {
-      onImport(csvProducts)
-      reset()
-      onOpenChange(false)
-    }
+    if (csvProducts.length === 0) return
+    const products = vendorMissing && vendorInput.trim()
+      ? csvProducts.map((p) => ({ ...p, vendorId: vendorInput.trim() }))
+      : csvProducts
+    onImport(products)
+    reset()
+    onOpenChange(false)
   }
 
   return (
@@ -219,6 +227,20 @@ export function ImportProductsModal({
           </div>
         )}
 
+        {vendorMissing && (
+          <div className="space-y-1.5">
+            <Label htmlFor="vendor-input">
+              Tedarikçi adı PDF&apos;ten okunamadı — lütfen girin
+            </Label>
+            <Input
+              id="vendor-input"
+              placeholder="ör. Güler Elektronik"
+              value={vendorInput}
+              onChange={(e) => setVendorInput(e.target.value)}
+            />
+          </div>
+        )}
+
         {pdfText && (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
@@ -237,7 +259,10 @@ export function ImportProductsModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             İptal
           </Button>
-          <Button onClick={handleImport} disabled={csvProducts.length === 0}>
+          <Button
+            onClick={handleImport}
+            disabled={csvProducts.length === 0 || (vendorMissing && !vendorInput.trim())}
+          >
             {csvProducts.length > 0 ? `${csvProducts.length} Ürün Ekle` : 'İmport'}
           </Button>
         </DialogFooter>
