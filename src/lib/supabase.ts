@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
 
-export const supabaseEnabled = Boolean(supabaseUrl && supabaseAnonKey)
+export const supabaseEnabled = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const supabase: ReturnType<typeof createClient> = supabaseEnabled
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : (null as any)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
