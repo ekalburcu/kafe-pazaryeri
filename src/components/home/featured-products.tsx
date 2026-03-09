@@ -14,7 +14,7 @@ export function FeaturedProducts() {
   const products =
     featured.length > 0
       ? featured
-      : getProducts({ page: 1 }, overrides).items.slice(0, 8)
+      : getProducts({ page: 1 }, overrides).data.slice(0, 8)
 
   if (products.length === 0) return null
 
